@@ -12,7 +12,7 @@
   @apply rounded-xs bg-gray-700 px-5 py-3 font-mono text-sm font-bold text-gray-200 dark:bg-gray-800;
 }
 
-.remark-code-title + div > pre {
+.remark-code-title+div>pre {
   @apply mt-0 rounded-t-none;
 }
 
@@ -43,100 +43,79 @@
 }
 
 /* Token styles */
-/**
- * MIT License
- * Copyright (c) 2018 Sarah Drasner
- * Sarah Drasner's[@sdras] Night Owl
- * Ported by Sara vieria [@SaraVieira]
- * Added by Souvik Mandal [@SimpleIndian]
- */
 .token.comment,
 .token.prolog,
+.token.doctype,
 .token.cdata {
-  color: rgb(99, 119, 119);
-  font-style: italic;
+  color: #797379;
 }
 
 .token.punctuation {
-  color: rgb(199, 146, 234);
+  color: #b9b5b8;
 }
 
 .namespace {
-  color: rgb(178, 204, 214);
+  opacity: .7;
 }
 
-.token.deleted {
-  color: rgba(239, 83, 80, 0.56);
-  font-style: italic;
-}
-
-.token.symbol,
-.token.property {
-  color: rgb(128, 203, 196);
-}
-
-.token.tag,
+.token.null,
 .token.operator,
-.token.keyword {
-  color: rgb(127, 219, 202);
-}
-
-.token.boolean {
-  color: rgb(255, 88, 116);
-}
-
+.token.boolean,
 .token.number {
-  color: rgb(247, 140, 108);
+  color: #fd8b19;
 }
 
-.token.constant,
-.token.function,
-.token.builtin,
-.token.char {
-  color: rgb(130, 170, 255);
+.token.property {
+  color: #fdcc59;
 }
 
-.token.selector,
-.token.doctype {
-  color: rgb(199, 146, 234);
-  font-style: italic;
+.token.tag {
+  color: #1290bf;
 }
 
-.token.attr-name,
-.token.inserted {
-  color: rgb(173, 219, 103);
-  font-style: italic;
+.token.string {
+  color: #149b93;
 }
 
-.token.string,
-.token.url,
+.token.selector {
+  color: #c85e7c;
+}
+
+.token.attr-name {
+  color: #fd8b19;
+}
+
 .token.entity,
+.token.url,
 .language-css .token.string,
 .style .token.string {
-  color: rgb(173, 219, 103);
+  color: #149b93;
 }
 
-.token.class-name,
-.token.atrule,
-.token.attr-value {
-  color: rgb(255, 203, 139);
+.token.attr-value,
+.token.keyword,
+.token.control,
+.token.directive,
+.token.unit {
+  color: #8fc13e;
 }
 
+.token.statement,
 .token.regex,
-.token.important,
-.token.variable {
-  color: rgb(214, 222, 235);
+.token.atrule {
+  color: #149b93;
 }
 
-.token.important,
-.token.bold {
+.token.placeholder,
+.token.variable {
+  color: #1290bf;
+}
+
+.token.important {
+  color: #dd464c;
   font-weight: bold;
 }
 
-.token.italic {
-  font-style: italic;
-}
-
-.token.table {
-  display: inline;
+.token.entity {
+  cursor: help;
 }

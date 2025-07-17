@@ -16,9 +16,10 @@
   --color-primary-100: oklch(0.948 0.028 342.258);
   --color-primary-200: oklch(0.899 0.061 343.231);
   --color-primary-300: oklch(0.823 0.12 346.018);
-  --color-primary-400: oklch(0.718 0.202 349.761);
-  --color-primary-500: oklch(0.656 0.241 354.308);
-  --color-primary-600: oklch(0.592 0.249 0.584);
+  --color-primary-400: oklch(0.8 0.23 80);
+
+  --color-primary-500: oklch(0.7 0.3 90);
+  --color-primary-600: oklch(0.75 0.23 80);
   --color-primary-700: oklch(0.525 0.223 3.958);
   --color-primary-800: oklch(0.459 0.187 3.815);
   --color-primary-900: oklch(0.408 0.153 2.432);
@@ -57,6 +58,7 @@
   color utility to any element that depends on these defaults.
 */
 @layer base {
+
   *,
   ::after,
   ::before,
@@ -82,20 +84,25 @@
   .prose {
     & a {
       color: var(--color-primary-500);
+
       &:hover {
         color: var(--color-primary-600);
       }
+
       & code {
         color: var(--color-primary-400);
       }
     }
+
     & :where(h1, h2) {
       font-weight: 700;
       letter-spacing: var(--tracking-tight);
     }
+
     & h3 {
       font-weight: 600;
     }
+
     & :where(code):not(pre code) {
       color: var(--color-indigo-500);
     }
@@ -104,13 +111,16 @@
   .prose-invert {
     & a {
       color: var(--color-primary-500);
+
       &:hover {
         color: var(--color-primary-400);
       }
+
       & code {
         color: var(--color-primary-400);
       }
     }
+
     & :where(h1, h2, h3, h4, h5, h6) {
       color: var(--color-gray-100);
     }
@@ -142,8 +152,10 @@
 }
 
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 /* https://stackoverflow.com/questions/61083813/how-to-avoid-internal-autofill-selected-style-to-be-applied */

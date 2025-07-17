@@ -7,20 +7,19 @@ interface Project {
 
 const projectsData: Project[] = [
   {
-    title: 'A Search Engine',
-    description: `What if you could look up any information in the world? Webpages, images, videos
-    and more. Google has many features to help you find exactly what you're looking
-    for.`,
-    imgSrc: '/static/images/google.png',
-    href: 'https://www.google.com',
+    title: 'Homelab AI Assistant',
+    description: `A personal AI assistant that helps you manage your homelab. Includes a Tools server
+    built with FastApi which allows the LLM to connect to your Homelab services. Currently supports
+    integrations to Portainer and Proxmox. Powered by OpenWebUI.`,
+    imgSrc: '/static/images/proxmox.png',
+    href: 'https://github.com/v3se/homelab-assistant',
   },
   {
-    title: 'The Time Machine',
-    description: `Imagine being able to travel back in time or to the future. Simple turn the knob
-    to the desired date and press "Go". No more worrying about lost keys or
-    forgotten headphones with this simple yet affordable solution.`,
-    imgSrc: '/static/images/time-machine.jpg',
-    href: '/blog/the-time-machine',
+    title: 'Discord Game Server Manager Bot',
+    description: `Discord bot that allows to start EC2 instances in AWS. Used for starting game servers
+    from our Discord server. It includes automation to stop the EC2 instance if no traffic is detected in 15 minutes`,
+    imgSrc: '/static/images/discord.png',
+    href: 'https://github.com/v3se/discord-ec2',
   },
 ]
 
