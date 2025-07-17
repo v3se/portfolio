@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 const terminalLines = [
   { command: 'whoami', output: 'robertvesterinen' },
   { command: 'pwd', output: '/home/robertvesterinen' },
-  { command: 'ls', output: 'Anime Documents  Downloads  Pictures' },
+  { command: 'ls', output: 'Anime Documents Projects' },
   { command: 'rm -rf /*', output: `Connection lost` },
 ];
 
