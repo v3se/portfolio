@@ -1,12 +1,12 @@
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: 'Portfolio',
+  title: 'Devlog',
   author: 'Robert Vesterinen',
   headerTitle: '@robertvesterinen',
   description: 'Blog posts about my projects, homelab and other things I find interesting.',
   language: 'en-us',
   theme: 'dark', // system, dark or light
-  siteUrl: 'https://tailwind-nextjs-starter-blog.vercel.app',
+  siteUrl: 'https://devlog.vesenet.net',
   siteRepo: 'https://github.com/v3se/portfolio',
   siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
   socialBanner: `${process.env.BASE_PATH || ''}/static/images/twitter-card.png`,
