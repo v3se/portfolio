@@ -36,6 +36,10 @@ const siteMetadata = {
       // src: 'https://us.umami.is/script.js'
       // Remember to add 'us.umami.is' in `next.config.js` as a permitted domain for the CSP
     },
+    // Cloudflare Web Analytics
+    cloudflareAnalytics: {
+      token: process.env.NEXT_PUBLIC_CLOUDFLARE_ANALYTICS_TOKEN, // e.g. abc123def456
+    },
     // plausibleAnalytics: {
     //   plausibleDataDomain: '', // e.g. tailwind-nextjs-starter-blog.vercel.app
     // If you are hosting your own Plausible.
