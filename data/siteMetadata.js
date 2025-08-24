@@ -9,7 +9,7 @@ const siteMetadata = {
   siteUrl: 'https://devlog.vesenet.net',
   siteRepo: 'https://github.com/v3se/portfolio',
   siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
-  socialBanner: `${process.env.BASE_PATH || ''}/static/images/twitter-card.png`,
+  socialBanner: `${process.env.BASE_PATH || ''}/static/images/twitter-card.jpg`,
   //mastodon: 'https://mastodon.social/@mastodonuser',
   email: 'robertvesterinen@gmail.com',
   github: 'https://github.com/v3se',
