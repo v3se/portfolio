@@ -1,4 +1,4 @@
-# Devlog - Robert Vesterinen's Portfolio
+# Devlog - Robert
 
 A personal blog and portfolio built with [Next.js](https://nextjs.org/), [Tailwind CSS](https://tailwindcss.com/), and [Contentlayer](https://www.contentlayer.dev/). 
 
@@ -16,7 +16,7 @@ This is my personal development blog where I share posts about my projects, home
 - 📱 Mobile-responsive design
 - 🔍 Search functionality with Kbar
 - 💬 Comments via Giscus
-- 📊 Analytics with Umami
+- **Analytics**: [Umami](https://umami.is/) & [Cloudflare Analytics](https://www.cloudflare.com/analytics/)
 - 🚀 Optimized performance with Next.js App Router
 
 ## Tech Stack
@@ -25,7 +25,6 @@ This is my personal development blog where I share posts about my projects, home
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **Content**: [Contentlayer](https://www.contentlayer.dev/) for MDX processing
 - **Typography**: [next/font](https://nextjs.org/docs/app/api-reference/components/font) with font optimization
-- **Analytics**: [Umami](https://umami.is/)
 - **Comments**: [Giscus](https://giscus.app/)
 - **Search**: [Kbar](https://github.com/timc1/kbar) command palette
 - **Deployment**: [Vercel](https://vercel.com)
@@ -180,6 +179,6 @@ Consider removing the following features that cannot be used in a static build:
 
 Using the template? Support this effort by giving a star on GitHub, sharing your own blog and giving a shoutout on Twitter or becoming a project [sponsor](https://github.com/sponsors/timlrx).
 
-## Licence
+## License
 
 [MIT](https://github.com/timlrx/tailwind-nextjs-starter-blog/blob/main/LICENSE) © [Timothy Lin](https://www.timlrx.com)
