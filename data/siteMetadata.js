@@ -17,7 +17,7 @@ const siteMetadata = {
   // twitter: 'https://twitter.com/Twitter',
   //facebook: 'https://facebook.com',
   //youtube: 'https://youtube.com',
-  linkedin: 'www.linkedin.com/in/robert-vesterinen-8205bab5',
+  linkedin: 'https://www.linkedin.com/in/robert-vesterinen-8205bab5',
   //threads: 'https://www.threads.net',
   //instagram: 'https://www.instagram.com',
   //medium: 'https://medium.com',
