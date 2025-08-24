@@ -25,6 +25,8 @@ const siteMetadata = {
   locale: 'en-US',
   // set to true if you want a navbar fixed to the top
   stickyNav: false,
+  // set to true if you want to show "Discuss on Twitter" button on blog posts
+  showTwitterDiscussion: false,
   analytics: {
     // If you want to use an analytics provider you have to add it to the
     // content security policy in the `next.config.js` file.
