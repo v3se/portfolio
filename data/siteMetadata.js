@@ -50,6 +50,10 @@ const siteMetadata = {
     // googleAnalytics: {
     //   googleAnalyticsId: '', // e.g. G-XXXXXXX
     // },
+    // Add Cloudflare Web Analytics
+    cloudflareAnalytics: {
+      token: 'c11a5b7778fc4054874a80153870cee8',
+    },
   },
   // newsletter: {
   //   // supports mailchimp, buttondown, convertkit, klaviyo, revue, emailoctopus, beehive
