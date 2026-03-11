@@ -2,15 +2,20 @@
 
 import { Dialog, DialogPanel, Transition, TransitionChild } from '@headlessui/react'
 import { disableBodyScroll, enableBodyScroll, clearAllBodyScrollLocks } from 'body-scroll-lock'
-import { Fragment, useState, useEffect, useRef } from 'react'
+import { Fragment, useState, useEffect, useRef, useCallback } from 'react'
 import Link from './Link'
 import headerNavLinks from '@/data/headerNavLinks'
 
 const MobileNav = () => {
   const [navShow, setNavShow] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const navRef = useRef(null)
 
-  const onToggleNav = () => {
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const onToggleNav = useCallback(() => {
     setNavShow((status) => {
       if (status) {
         enableBodyScroll(navRef.current)
@@ -20,7 +25,7 @@ const MobileNav = () => {
       }
       return !status
     })
-  }
+  }, [])
 
   useEffect(() => {
     return clearAllBodyScrollLocks
@@ -42,7 +47,7 @@ const MobileNav = () => {
           />
         </svg>
       </button>
-      <Transition appear show={navShow} as={Fragment} unmount={false}>
+      {mounted && <Transition appear show={navShow} as={Fragment} unmount={false}>
         <Dialog as="div" onClose={onToggleNav} unmount={false}>
           <TransitionChild
             as={Fragment}
@@ -100,7 +105,7 @@ const MobileNav = () => {
             </DialogPanel>
           </TransitionChild>
         </Dialog>
-      </Transition>
+      </Transition>}
     </>
   )
 }
