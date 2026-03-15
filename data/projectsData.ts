@@ -7,6 +7,12 @@ interface Project {
 
 const projectsData: Project[] = [
   {
+    title: 'Serverless RAG Application',
+    description: `A serverless RAG application built on AWS that lets you ask questions about your documents and get answers with exact source citations. Built with API Gateway, Lambda, Bedrock, and S3.`,
+    imgSrc: '/static/images/aws.png',
+    href: 'https://github.com/v3se/aws-rag-demo',
+  },
+  {
     title: 'Homelab AI Assistant',
     description: `A personal AI assistant that helps you manage your homelab. Includes a Tools server
     built with FastApi which allows the LLM to connect to your Homelab services. Currently supports

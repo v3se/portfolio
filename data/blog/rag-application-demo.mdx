@@ -1,0 +1,783 @@
+---
+title: 'Building a Serverless RAG Application on AWS'
+date: '2026-03-15'
+tags: ['aws', 'ai', 'bedrock', 'rag', 'serverless']
+draft: false
+summary: 'Ask questions about your documents, get answers with exact sources (filename, page number) and avoid LLM hallucinations with very low costs.'
+---
+
+# Introduction
+
+With the current climate of AI hype, I decided to start experimenting with GenAI tools and see if I could build a GenAI application that is useful for me personally.
+Everyone has been talking about agents and agentic AI (OpenAI, Claude Agents), although this is something that I will most likely explore in the future,
+this time I set my focus on mitigating an issue that has been annoying me since I first used ChatGPT when it came out; **LLM hallucination**.
+
+The issue with LLMs is that when they don't have an answer to the question that you asked, they usually don't respond with "I don't have the answer".
+They respond with false information in a very convincing way. Another challenge is that they can also present an answer that is out-of-date or reference non-authoritative
+sources. Or they may get confused by terminology that has different meanings in different contexts.
+
+One approach of mitigating these issues is called **Retrieval-Augmented Generation (RAG)**.
+
+---
+
+# Retrieval-Augmented Generation (RAG)
+
+Retrieval-Augmented Generation (RAG) is a technique that improves LLM responses by retrieving relevant information from a knowledge base before generating an answer. Rather than relying solely on what the model learned during training, RAG enriches
+the prompt with up-to-date, domain-specific context — resulting in more accurate and grounded responses.
+
+To understand what RAG aims to solve, we need to learn a bit about how LLMs work. LLMs are trained on a dataset with a knowledge cutoff date.
+You probably have noticed this if you have asked an LLM about football game results from last night. The current ChatBots have tools that they can use to fetch information
+from the web so this issue doesn't happen that often anymore. But without any tools, the LLM will most likely hallucinate answers that are beyond the knowledge cutoff date.
+
+LLM training data of course doesn't contain your company's internal documentation or your personal study notes which will also lead to incorrect answers since it doesn't know the industry-specific terminology etc.
+
+So let's summarize the common issues with LLMs that cause hallucinations:
+
+1. **Trained on a static dataset** - LLMs simply aren't trained with information which is outside of this scope
+2. **Learns statistical patterns**, not facts - LLMs produce text that sounds right in a very convincing way, but it really isn't true
+3. **Parametric memory** - The knowledge is baked into the model's weights. The parametric memory can't be updated without retraining or [fine-tuning](https://www.ibm.com/think/topics/fine-tuning).
+4. **No source attribution** - Can't point to where it got the information from
+
+Ok, so just to recap RAG basically does a semantic search, incorporates the search results (including the content) with the context, and sends them to the LLM.
+But how does it exactly find the relevant information? That's where we dive into the world of **similarity searches** and **vector stores**.
+
+## Vector databases and Embedding
+
+Vectors are arrays of numbers that allow machines to understand and process data. They can be generated from source data located in e.g. S3 object storage by using an **embedding** model such as
+**Amazon Titan Text**. The embedding model converts the raw data from the object file into vector embeddings.
+
+<div className="my-10 flex justify-center">
+  <svg viewBox="0 0 900 320" className="w-full max-w-3xl" xmlns="http://www.w3.org/2000/svg">
+    {/* S3 Bucket */}
+    <g>
+      <rect x="20" y="90" width="140" height="140" rx="16" className="fill-orange-50 stroke-orange-400 dark:fill-orange-950 dark:stroke-orange-500" strokeWidth="2.5" />
+      {/* S3 icon — bucket shape */}
+      <ellipse cx="90" cy="135" rx="38" ry="12" className="fill-orange-200 stroke-orange-500 dark:fill-orange-800 dark:stroke-orange-400" strokeWidth="1.5" />
+      <path d="M52 135 v50 c0 8 17 14 38 14 s38-6 38-14 v-50" className="fill-orange-100 stroke-orange-500 dark:fill-orange-900 dark:stroke-orange-400" strokeWidth="1.5" />
+      <ellipse cx="90" cy="185" rx="38" ry="12" className="fill-none stroke-orange-500 dark:stroke-orange-400" strokeWidth="1.5" strokeDasharray="4 3" />
+      {/* File icon inside bucket */}
+      <rect x="75" y="148" width="22" height="28" rx="2" className="fill-white stroke-orange-500 dark:fill-gray-800 dark:stroke-orange-400" strokeWidth="1.2" />
+      <path d="M85 148 v8 h8" className="fill-none stroke-orange-500 dark:stroke-orange-400" strokeWidth="1" />
+      <line x1="80" y1="160" x2="92" y2="160" className="stroke-orange-400 dark:stroke-orange-500" strokeWidth="1" />
+      <line x1="80" y1="164" x2="92" y2="164" className="stroke-orange-400 dark:stroke-orange-500" strokeWidth="1" />
+      <line x1="80" y1="168" x2="88" y2="168" className="stroke-orange-400 dark:stroke-orange-500" strokeWidth="1" />
+      <text x="90" y="250" textAnchor="middle" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "13px", fontWeight: 600}}>S3 Document</text>
+      <text x="90" y="268" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "11px"}}>.pdf / .txt / .docx</text>
+    </g>
+
+    {/* Arrow 1 */}
+    <g>
+      <line x1="170" y1="160" x2="240" y2="160" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="2" markerEnd="url(#arrowhead)" />
+      <text x="205" y="138" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>parse &amp;</text>
+      <text x="205" y="150" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>chunk</text>
+    </g>
+
+    {/* Text Chunks */}
+    <g>
+      {/* Stacked cards effect */}
+      <rect x="256" y="104" width="130" height="80" rx="10" className="fill-blue-50 stroke-blue-300 dark:fill-blue-950 dark:stroke-blue-700" strokeWidth="1.5" opacity="0.5" />
+      <rect x="250" y="98" width="130" height="80" rx="10" className="fill-blue-50 stroke-blue-300 dark:fill-blue-950 dark:stroke-blue-700" strokeWidth="1.5" opacity="0.7" />
+      <rect x="244" y="92" width="130" height="80" rx="10" className="fill-blue-100 stroke-blue-400 dark:fill-blue-900 dark:stroke-blue-600" strokeWidth="2" />
+      {/* Text lines */}
+      <line x1="260" y1="112" x2="358" y2="112" className="stroke-blue-300 dark:stroke-blue-600" strokeWidth="2" strokeLinecap="round" />
+      <line x1="260" y1="122" x2="348" y2="122" className="stroke-blue-300 dark:stroke-blue-600" strokeWidth="2" strokeLinecap="round" />
+      <line x1="260" y1="132" x2="354" y2="132" className="stroke-blue-300 dark:stroke-blue-600" strokeWidth="2" strokeLinecap="round" />
+      <line x1="260" y1="142" x2="330" y2="142" className="stroke-blue-300 dark:stroke-blue-600" strokeWidth="2" strokeLinecap="round" />
+      <line x1="260" y1="152" x2="345" y2="152" className="stroke-blue-300 dark:stroke-blue-600" strokeWidth="2" strokeLinecap="round" />
+      <line x1="260" y1="162" x2="310" y2="162" className="stroke-blue-300 dark:stroke-blue-600" strokeWidth="2" strokeLinecap="round" />
+      <text x="309" y="230" textAnchor="middle" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "13px", fontWeight: 600}}>Text Chunks</text>
+      <text x="309" y="248" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "11px"}}>overlapping segments</text>
+    </g>
+
+    {/* Arrow 2 */}
+    <g>
+      <line x1="386" y1="160" x2="456" y2="160" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="2" markerEnd="url(#arrowhead)" />
+    </g>
+
+    {/* Embedding Model */}
+    <g>
+      <rect x="460" y="80" width="160" height="160" rx="16" className="fill-purple-50 stroke-purple-400 dark:fill-purple-950 dark:stroke-purple-500" strokeWidth="2.5" />
+      {/* Neural network nodes */}
+      {/* Input layer */}
+      <circle cx="495" cy="120" r="8" className="fill-purple-200 stroke-purple-500 dark:fill-purple-800 dark:stroke-purple-400" strokeWidth="1.5" />
+      <circle cx="495" cy="150" r="8" className="fill-purple-200 stroke-purple-500 dark:fill-purple-800 dark:stroke-purple-400" strokeWidth="1.5" />
+      <circle cx="495" cy="180" r="8" className="fill-purple-200 stroke-purple-500 dark:fill-purple-800 dark:stroke-purple-400" strokeWidth="1.5" />
+      <circle cx="495" cy="210" r="8" className="fill-purple-200 stroke-purple-500 dark:fill-purple-800 dark:stroke-purple-400" strokeWidth="1.5" />
+      {/* Hidden layer */}
+      <circle cx="540" cy="130" r="8" className="fill-purple-300 stroke-purple-500 dark:fill-purple-700 dark:stroke-purple-400" strokeWidth="1.5" />
+      <circle cx="540" cy="160" r="8" className="fill-purple-300 stroke-purple-500 dark:fill-purple-700 dark:stroke-purple-400" strokeWidth="1.5" />
+      <circle cx="540" cy="190" r="8" className="fill-purple-300 stroke-purple-500 dark:fill-purple-700 dark:stroke-purple-400" strokeWidth="1.5" />
+      {/* Output layer */}
+      <circle cx="585" cy="140" r="8" className="fill-purple-400 stroke-purple-600 dark:fill-purple-600 dark:stroke-purple-400" strokeWidth="1.5" />
+      <circle cx="585" cy="170" r="8" className="fill-purple-400 stroke-purple-600 dark:fill-purple-600 dark:stroke-purple-400" strokeWidth="1.5" />
+      <circle cx="585" cy="200" r="8" className="fill-purple-400 stroke-purple-600 dark:fill-purple-600 dark:stroke-purple-400" strokeWidth="1.5" />
+      {/* Connections input→hidden */}
+      <line x1="503" y1="120" x2="532" y2="130" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="120" x2="532" y2="160" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="150" x2="532" y2="130" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="150" x2="532" y2="160" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="150" x2="532" y2="190" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="180" x2="532" y2="160" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="180" x2="532" y2="190" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="210" x2="532" y2="190" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="503" y1="210" x2="532" y2="160" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      {/* Connections hidden→output */}
+      <line x1="548" y1="130" x2="577" y2="140" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="548" y1="130" x2="577" y2="170" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="548" y1="160" x2="577" y2="140" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="548" y1="160" x2="577" y2="170" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="548" y1="160" x2="577" y2="200" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="548" y1="190" x2="577" y2="170" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <line x1="548" y1="190" x2="577" y2="200" className="stroke-purple-300 dark:stroke-purple-600" strokeWidth="0.8" opacity="0.6" />
+      <text x="540" y="268" textAnchor="middle" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "13px", fontWeight: 600}}>Embedding Model</text>
+      <text x="540" y="286" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "11px"}}>e.g. Titan Embeddings</text>
+    </g>
+
+    {/* Arrow 3 */}
+    <g>
+      <line x1="630" y1="160" x2="700" y2="160" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="2" markerEnd="url(#arrowhead)" />
+    </g>
+
+    {/* Vector Output */}
+    <g>
+      <rect x="704" y="80" width="170" height="160" rx="16" className="fill-green-50 stroke-green-400 dark:fill-green-950 dark:stroke-green-500" strokeWidth="2.5" />
+      {/* Vector numbers */}
+      <text x="789" y="108" textAnchor="middle" className="fill-green-700 dark:fill-green-300" style={{fontSize: "11px", fontFamily: "monospace"}}>1536 dimensions</text>
+      <text x="724" y="132" className="fill-green-600 dark:fill-green-400" style={{fontSize: "13px", fontFamily: "monospace"}}>[</text>
+      <text x="734" y="132" className="fill-green-800 dark:fill-green-200" style={{fontSize: "12px", fontFamily: "monospace"}}>0.0231,</text>
+      <text x="734" y="150" className="fill-green-800 dark:fill-green-200" style={{fontSize: "12px", fontFamily: "monospace"}}>-0.8432,</text>
+      <text x="734" y="168" className="fill-green-800 dark:fill-green-200" style={{fontSize: "12px", fontFamily: "monospace"}}>0.1205,</text>
+      <text x="734" y="186" className="fill-green-800 dark:fill-green-200" style={{fontSize: "12px", fontFamily: "monospace"}}>0.6719,</text>
+      <text x="734" y="204" className="fill-green-500 dark:fill-green-500" style={{fontSize: "12px", fontFamily: "monospace"}}>... 1532 more</text>
+      <text x="724" y="222" className="fill-green-600 dark:fill-green-400" style={{fontSize: "13px", fontFamily: "monospace"}}>]</text>
+      <text x="789" y="268" textAnchor="middle" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "13px", fontWeight: 600}}>Vector Embedding</text>
+      <text x="789" y="286" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "11px"}}>stored in vector DB</text>
+    </g>
+
+    {/* Arrowhead marker */}
+    <defs>
+      <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" className="fill-gray-400 dark:fill-gray-500" />
+      </marker>
+    </defs>
+
+  </svg>
+</div>
+
+The cool thing about these arrays of numbers is that they can be used to find similarities and relationships — not just matching keywords, but actual meaning.
+
+Take for example the word **cat** and **kitten**. Or **cat** and **animal**. These are words that are close to each other in a vector space. They have similar meaning. **Kitten** is closer to **cat** than **animal** is.
+
+So what can we do with this? Imagine if we convert a question such as **Are cats animals?** and process that through an embedding model. The embedding received from that question can be used to do a similarity search against the vector database.
+
+<div className="my-10 flex justify-center">
+  <svg viewBox="0 0 700 500" className="w-full max-w-2xl" xmlns="http://www.w3.org/2000/svg">
+    {/* Background grid */}
+    <defs>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" className="stroke-gray-200 dark:stroke-gray-800" strokeWidth="0.5" fill="none" />
+      </pattern>
+      <marker id="arrow2" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" className="fill-gray-400 dark:fill-gray-500" />
+      </marker>
+    </defs>
+    <rect x="50" y="30" width="620" height="420" rx="12" fill="url(#grid)" className="stroke-gray-300 dark:stroke-gray-700" strokeWidth="1.5" />
+
+    {/* Axis labels */}
+    <text x="360" y="470" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "11px", fontStyle: "italic"}}>Vector Space (simplified to 2D)</text>
+
+    {/* Legend — top right */}
+    <circle cx="510" cy="50" r="6" className="fill-orange-400 dark:fill-orange-500" />
+    <text x="522" y="54" className="fill-gray-600 dark:fill-gray-400" style={{fontSize: "11px"}}>Your question</text>
+    <circle cx="510" cy="70" r="6" className="fill-blue-400 dark:fill-blue-500" />
+    <text x="522" y="74" className="fill-gray-600 dark:fill-gray-400" style={{fontSize: "11px"}}>Document embeddings</text>
+    <circle cx="510" cy="90" r="6" className="fill-gray-300 dark:fill-gray-600" />
+    <text x="522" y="94" className="fill-gray-600 dark:fill-gray-400" style={{fontSize: "11px"}}>Unrelated documents</text>
+
+    {/* --- Unrelated cluster: cooking (closer to green circle) --- */}
+    <circle cx="460" cy="170" r="6" className="fill-gray-300 dark:fill-gray-600" opacity="0.7" />
+    <text x="472" y="174" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>pasta recipe</text>
+    <circle cx="500" cy="200" r="6" className="fill-gray-300 dark:fill-gray-600" opacity="0.7" />
+    <text x="512" y="204" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>baking tips</text>
+    <circle cx="480" cy="240" r="6" className="fill-gray-300 dark:fill-gray-600" opacity="0.7" />
+    <text x="492" y="244" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>kitchen tools</text>
+
+    {/* --- Unrelated cluster: programming (closer to green circle) --- */}
+    <circle cx="130" cy="290" r="6" className="fill-gray-300 dark:fill-gray-600" opacity="0.7" />
+    <text x="142" y="294" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>Python loops</text>
+    <circle cx="100" cy="340" r="6" className="fill-gray-300 dark:fill-gray-600" opacity="0.7" />
+    <text x="112" y="344" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>REST APIs</text>
+    <circle cx="160" cy="360" r="6" className="fill-gray-300 dark:fill-gray-600" opacity="0.7" />
+    <text x="172" y="364" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "10px"}}>databases</text>
+
+    {/* --- Cat/animal cluster (moved up ~40px) --- */}
+    {/* Proximity circle */}
+    <circle cx="280" cy="160" r="110" className="fill-green-100 dark:fill-green-950" opacity="0.4" />
+    <circle cx="280" cy="160" r="110" className="stroke-green-400 dark:stroke-green-600" strokeWidth="1.5" strokeDasharray="6 4" fill="none" />
+    <text x="280" y="42" textAnchor="middle" className="fill-green-600 dark:fill-green-400" style={{fontSize: "11px", fontWeight: 600}}>closest matches</text>
+
+    {/* Cat-related document points */}
+    <circle cx="250" cy="130" r="8" className="fill-blue-400 stroke-blue-600 dark:fill-blue-500 dark:stroke-blue-400" strokeWidth="1.5" />
+    <text x="212" y="118" className="fill-blue-600 dark:fill-blue-400" style={{fontSize: "11px", fontWeight: 500}}>cat</text>
+
+    <circle cx="310" cy="115" r="8" className="fill-blue-400 stroke-blue-600 dark:fill-blue-500 dark:stroke-blue-400" strokeWidth="1.5" />
+    <text x="324" y="112" className="fill-blue-600 dark:fill-blue-400" style={{fontSize: "11px", fontWeight: 500}}>kitten</text>
+
+    <circle cx="230" cy="190" r="8" className="fill-blue-400 stroke-blue-600 dark:fill-blue-500 dark:stroke-blue-400" strokeWidth="1.5" />
+    <text x="185" y="194" className="fill-blue-600 dark:fill-blue-400" style={{fontSize: "11px", fontWeight: 500}}>animal</text>
+
+    <circle cx="340" cy="170" r="8" className="fill-blue-400 stroke-blue-600 dark:fill-blue-500 dark:stroke-blue-400" strokeWidth="1.5" />
+    <text x="354" y="167" className="fill-blue-600 dark:fill-blue-400" style={{fontSize: "11px", fontWeight: 500}}>pet care</text>
+
+    <circle cx="270" cy="220" r="8" className="fill-blue-400 stroke-blue-600 dark:fill-blue-500 dark:stroke-blue-400" strokeWidth="1.5" />
+    <text x="284" y="230" className="fill-blue-600 dark:fill-blue-400" style={{fontSize: "11px", fontWeight: 500}}>mammals</text>
+
+    {/* Query point — larger, highlighted */}
+    <circle cx="285" cy="155" r="12" className="fill-orange-400 stroke-orange-600 dark:fill-orange-500 dark:stroke-orange-400" strokeWidth="2.5" />
+    <circle cx="285" cy="155" r="20" className="stroke-orange-400 dark:stroke-orange-500" strokeWidth="1.5" fill="none" opacity="0.5" />
+
+    {/* Query label with background */}
+    <rect x="330" y="280" width="165" height="28" rx="6" className="fill-orange-100 stroke-orange-400 dark:fill-orange-950 dark:stroke-orange-500" strokeWidth="1.5" />
+    <text x="412" y="299" textAnchor="middle" className="fill-orange-700 dark:fill-orange-300" style={{fontSize: "12px", fontWeight: 700}}>Are cats animals?</text>
+    <line x1="330" y1="294" x2="293" y2="167" className="stroke-orange-400 dark:stroke-orange-500" strokeWidth="1" strokeDasharray="3 2" />
+
+  </svg>
+</div>
+
+## The full RAG pipeline
+
+In this case the search (**retrieval**) would return the source chunks that are closest matches based on semantic meaning. We can incorporate these chunks with the original question (**augmentation**) to add additional context and forward this to the LLM to process (**generation**) the answer. LLM can then base its answer on the retrieved content and even add source references to the answer.
+
+In short, we first want to create our vector database which can also be referred to as **Knowledge Base**:
+
+1. Upload your data (text, images, audio) to a data source such as S3 object storage
+2. Split the data to chunks and ingest the data
+3. Create embeddings using an embeddings model
+4. Store the generated embeddings to a vector database
+
+Then perform **Retrieval-Augmented Generation**
+
+1. Send the question to an embeddings model
+2. Use the generated embeddings to do a search against the vector database
+3. Send both the returned results and the question to LLM to generate an answer
+
+Here's an example of what a RAG-powered chat looks like in practice:
+
+<div className="my-8 mx-auto max-w-xl rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+  {/* Chat header */}
+  <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="18" height="18" rx="4" className="stroke-purple-500 dark:stroke-purple-400" strokeWidth="2" />
+      <circle cx="9" cy="12" r="1.5" className="fill-purple-500 dark:fill-purple-400" />
+      <circle cx="15" cy="12" r="1.5" className="fill-purple-500 dark:fill-purple-400" />
+    </svg>
+    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">RAG Assistant</span>
+  </div>
+
+  <div className="flex flex-col gap-3 p-4 bg-white dark:bg-gray-950">
+    {/* User message */}
+    <div className="flex justify-end">
+      <div className="rounded-2xl rounded-br-md px-4 py-2.5 max-w-[80%] bg-blue-500 text-white text-sm">
+        Are cats animals?
+      </div>
+    </div>
+
+    {/* Bot response */}
+    <div className="flex justify-start">
+      <div className="rounded-2xl rounded-bl-md px-4 py-2.5 max-w-[85%] bg-gray-100 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200">
+        <p className="mb-2">Yes, cats are domesticated animals belonging to the family <strong>Felidae</strong>. They are small carnivorous mammals that have been kept as pets for thousands of years. Cats are closely related to wild species such as lions and tigers.</p>
+        <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Sources:</p>
+          <p className="text-xs text-purple-600 dark:text-purple-400">mammals-encyclopedia.pdf — page 42</p>
+          <p className="text-xs text-purple-600 dark:text-purple-400">pet-care-guide.pdf — page 3</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{/* Behind the scenes diagram */}
+
+<div className="my-2 mx-auto max-w-xl">
+  <div className="flex items-center gap-2 px-4 py-2 rounded-t-xl border border-b-0 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17" className="stroke-gray-500 dark:stroke-gray-400" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">What happens behind the scenes</span>
+  </div>
+  <svg viewBox="0 0 440 590" className="w-full rounded-b-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950" xmlns="http://www.w3.org/2000/svg">
+
+    {/* Step 1: User question */}
+    <rect x="120" y="20" width="200" height="50" rx="10" className="fill-blue-50 stroke-blue-400 dark:fill-blue-950 dark:stroke-blue-500" strokeWidth="1.5" />
+    <text x="220" y="40" textAnchor="middle" className="fill-blue-700 dark:fill-blue-300" style={{fontSize: "11px", fontWeight: 600}}>1. User Question</text>
+    <text x="220" y="56" textAnchor="middle" className="fill-blue-500 dark:fill-blue-400" style={{fontSize: "10px", fontFamily: "monospace"}}>"Are cats animals?"</text>
+
+    {/* Arrow down */}
+    <line x1="220" y1="70" x2="220" y2="92" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1.5" />
+    <polygon points="214,88 220,98 226,88" className="fill-gray-400 dark:fill-gray-500" />
+
+    {/* Step 2: Embedding model */}
+    <rect x="120" y="100" width="200" height="50" rx="10" className="fill-purple-50 stroke-purple-400 dark:fill-purple-950 dark:stroke-purple-500" strokeWidth="1.5" />
+    <text x="220" y="120" textAnchor="middle" className="fill-purple-700 dark:fill-purple-300" style={{fontSize: "11px", fontWeight: 600}}>2. Embedding Model</text>
+    <text x="220" y="138" textAnchor="middle" className="fill-purple-500 dark:fill-purple-400" style={{fontSize: "10px", fontFamily: "monospace"}}>[0.023, -0.843, 0.12, ...]</text>
+
+    {/* Arrow down */}
+    <line x1="220" y1="150" x2="220" y2="172" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1.5" />
+    <polygon points="214,168 220,178 226,168" className="fill-gray-400 dark:fill-gray-500" />
+
+    {/* Step 3: Vector DB search */}
+    <rect x="120" y="180" width="200" height="50" rx="10" className="fill-green-50 stroke-green-400 dark:fill-green-950 dark:stroke-green-500" strokeWidth="1.5" />
+    <text x="220" y="200" textAnchor="middle" className="fill-green-700 dark:fill-green-300" style={{fontSize: "11px", fontWeight: 600}}>3. Vector DB Search</text>
+    <text x="220" y="218" textAnchor="middle" className="fill-green-500 dark:fill-green-400" style={{fontSize: "10px"}}>similarity search (top-k)</text>
+
+    {/* Arrow down */}
+    <line x1="220" y1="230" x2="220" y2="252" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1.5" />
+    <polygon points="214,248 220,258 226,248" className="fill-gray-400 dark:fill-gray-500" />
+
+    {/* Step 4: Retrieved chunks */}
+    <rect x="100" y="260" width="240" height="90" rx="10" className="fill-amber-50 stroke-amber-400 dark:fill-amber-950 dark:stroke-amber-500" strokeWidth="1.5" />
+    <text x="220" y="280" textAnchor="middle" className="fill-amber-700 dark:fill-amber-300" style={{fontSize: "11px", fontWeight: 600}}>4. Retrieved Chunks</text>
+    <rect x="115" y="290" width="210" height="20" rx="4" className="fill-white stroke-amber-300 dark:fill-gray-800 dark:stroke-amber-600" strokeWidth="1" />
+    <text x="220" y="304" textAnchor="middle" className="fill-amber-600 dark:fill-amber-400" style={{fontSize: "9px", fontFamily: "monospace"}}>mammals-encyclopedia.pdf p.42</text>
+    <rect x="115" y="314" width="210" height="20" rx="4" className="fill-white stroke-amber-300 dark:fill-gray-800 dark:stroke-amber-600" strokeWidth="1" />
+    <text x="220" y="328" textAnchor="middle" className="fill-amber-600 dark:fill-amber-400" style={{fontSize: "9px", fontFamily: "monospace"}}>pet-care-guide.pdf p.3</text>
+
+    {/* Arrow down — chunks + question merge */}
+    <line x1="220" y1="350" x2="220" y2="372" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1.5" />
+    <polygon points="214,368 220,378 226,368" className="fill-gray-400 dark:fill-gray-500" />
+
+    {/* Dashed line from question to LLM — routed along left side */}
+    <line x1="120" y1="45" x2="60" y2="45" className="stroke-gray-300 dark:stroke-gray-600" strokeWidth="1.5" strokeDasharray="5 3" />
+    <line x1="60" y1="45" x2="60" y2="400" className="stroke-gray-300 dark:stroke-gray-600" strokeWidth="1.5" strokeDasharray="5 3" />
+    <line x1="60" y1="400" x2="98" y2="400" className="stroke-gray-300 dark:stroke-gray-600" strokeWidth="1.5" strokeDasharray="5 3" />
+    <polygon points="94,394 104,400 94,406" className="fill-gray-300 dark:fill-gray-600" />
+    <text x="48" y="220" textAnchor="middle" className="fill-gray-400 dark:fill-gray-500" style={{fontSize: "9px"}} transform="rotate(-90, 48, 220)">original question</text>
+
+    {/* Step 5: LLM */}
+    <rect x="105" y="380" width="230" height="50" rx="10" className="fill-purple-50 stroke-purple-400 dark:fill-purple-950 dark:stroke-purple-500" strokeWidth="1.5" />
+    <text x="220" y="400" textAnchor="middle" className="fill-purple-700 dark:fill-purple-300" style={{fontSize: "11px", fontWeight: 600}}>5. LLM (Generation)</text>
+    <text x="220" y="418" textAnchor="middle" className="fill-purple-500 dark:fill-purple-400" style={{fontSize: "10px"}}>question + chunks = prompt</text>
+
+    {/* Arrow down */}
+    <line x1="220" y1="430" x2="220" y2="452" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1.5" />
+    <polygon points="214,448 220,458 226,448" className="fill-gray-400 dark:fill-gray-500" />
+
+    {/* Step 6: Response */}
+    <rect x="105" y="460" width="230" height="110" rx="10" className="fill-blue-50 stroke-blue-400 dark:fill-blue-950 dark:stroke-blue-500" strokeWidth="1.5" />
+    <text x="220" y="480" textAnchor="middle" className="fill-blue-700 dark:fill-blue-300" style={{fontSize: "11px", fontWeight: 600}}>6. Generated Answer</text>
+    <text x="220" y="497" textAnchor="middle" className="fill-gray-600 dark:fill-gray-400" style={{fontSize: "9px"}}>"Yes, cats are domesticated</text>
+    <text x="220" y="509" textAnchor="middle" className="fill-gray-600 dark:fill-gray-400" style={{fontSize: "9px"}}>animals belonging to the family..."</text>
+    <line x1="120" y1="520" x2="320" y2="520" className="stroke-blue-200 dark:stroke-blue-700" strokeWidth="1" />
+    <text x="130" y="534" className="fill-gray-500 dark:fill-gray-400" style={{fontSize: "8px", fontWeight: 600}}>Sources:</text>
+    <text x="130" y="546" className="fill-purple-600 dark:fill-purple-400" style={{fontSize: "8px"}}>mammals-encyclopedia.pdf — p.42</text>
+    <text x="130" y="556" className="fill-purple-600 dark:fill-purple-400" style={{fontSize: "8px"}}>pet-care-guide.pdf — p.3</text>
+
+  </svg>
+</div>
+
+As we can see, we get a response based on the information in the knowledge base and we have the access to the source information as well. This doesn't entirely ensure that the LLM doesn't hallucinate but at least now we can see the sources and give some grounding for its answers.
+
+In the next section we get to the fun part, planning and building the application.
+
+# Building the RAG application
+
+This section goes into the architecture and implementation details and assumes that the reader has basic understanding of Python and some cloud engineering concepts.
+
+When selecting the services that should be used for a hobby project, usually the first thing to consider is the cost. And what would be the cheapest option in AWS to run a simple API? Using serverless as much as we can of course!
+
+## Service selection
+
+- AWS API Gateway for the simple API management
+- AWS Lambda for serverless backend
+- AWS Lambda Web Adapter for streaming support and portability (more about this later)
+- AWS Bedrock for GenAI related things (Knowledge Base, Embeddings, Generation)
+- S3 for documents and vector store. An alternative option was AWS OpenSearch, which has better search options (hybrid keyword + vector search) but it costs a lot (like 300USD/Month).
+- S3 + Cloudfront for UI (planned but not implemented)
+- AWS Cognito for auth (planned but not implemented)
+- AWS DynamoDB for storing sessions (planned but not implemented)
+
+The service selection was steered by operational simplicity and cost optimization. So using AWS managed services as much as possible and utilizing serverless.
+
+## Tool selection
+
+- CDK for Infrastructure-As-code
+- Projen for managing all project related configuration and tooling
+- Pre-commit, Husky etc. for pre-commit hooks and linting
+- Github Actions for CI/CD (With CDK Pipelines)
+
+Tool selection was also made pretty much based on operational simplicity. Projen is an excellent tool to spin up a new project with tools already in place for linting, release & package management. And CDK allows us to develop the infrastructure using code rather than clicking through the UI. Also, we can very easily create and destroy the environment when needed.
+
+## Architecture
+
+This is the high-level view of the **retrieve and generate** flow.
+
+AWS Bedrock has an API called [RetrieveAndGenerate](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_RetrieveAndGenerate.html) that combines **Retrieve** operation with [InvokeModel](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html). There is also [RetrieveAndGenerateStream](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_RetrieveAndGenerateStream.html) which outputs in streaming format which we could use.
+
+<figure className="my-8 text-center">
+  <img
+    src="/static/images/RetrieveAndGenerate.drawio.png"
+    alt="Retrieve And Generate Flow"
+    className="mx-auto mt-6 rounded-xl"
+  />
+  <figcaption className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+    Retrieve And Generate Flow
+  </figcaption>
+</figure>
+
+Then we have the knowledge base generation flow. Here we use S3 presigned URLs to upload files to an S3 bucket. The client starts the AWS Bedrock Knowledge Base ingestion job by calling an API. The status of the job can be queried by calling a /kb/status route.
+
+An alternative option to trigger the ingestion job would have been to use EventBridge to catch object created & deleted events and then handle the sync using a separate Lambda function. But I wanted to keep this as portable as possible and avoid having multiple Lambdas so I decided to let the client handle this orchestration completely.
+
+<figure className="my-8 text-center">
+  <img
+    src="/static/images/kb-architecture.drawio.png"
+    alt="Knowledge Base Architecture"
+    className="mx-auto mt-6 rounded-xl"
+  />
+  <figcaption className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+    Knowledge Base Sync flow
+  </figcaption>
+</figure>
+
+## Backend
+
+Let's start with the backend. Many modern cost optimized APIs are running with API Gateway + AWS Lambda combo. This will scale very well (although we don't need to worry about that with this project) and is quite cheap.
+
+### Streaming Setup
+
+AWS added support for [streaming to API Gateway REST APIs](https://aws.amazon.com/about-aws/whats-new/2025/11/api-gateway-response-streaming-rest-apis) a while ago which increases the responsiveness of ChatBots. This means that the responses reach the user incrementally near real-time instead of waiting the full response to be generated and then sent.
+Before this you needed to use Websocket API to enable streaming.
+
+<div className="my-8 mx-auto max-w-xl grid grid-cols-1 md:grid-cols-2 gap-4">
+  {/* Non-streaming */}
+  <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Without streaming</span>
+    </div>
+    <div className="p-3 bg-white dark:bg-gray-950">
+      <div className="flex justify-end mb-2">
+        <div className="rounded-2xl rounded-br-md px-3 py-1.5 bg-blue-500 text-white text-xs">What is a cat?</div>
+      </div>
+      <div className="flex justify-start">
+        <svg viewBox="0 0 260 60" className="w-full" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="260" height="60" rx="12" className="fill-gray-100 dark:fill-gray-800" />
+          {/* Loading dots that show for 4 seconds */}
+          <g opacity="1">
+            <circle cx="22" cy="30" r="4" className="fill-gray-400 dark:fill-gray-500">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="1s" repeatCount="4" />
+            </circle>
+            <circle cx="36" cy="30" r="4" className="fill-gray-400 dark:fill-gray-500">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="1s" begin="0.2s" repeatCount="4" />
+            </circle>
+            <circle cx="50" cy="30" r="4" className="fill-gray-400 dark:fill-gray-500">
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="1s" begin="0.4s" repeatCount="4" />
+            </circle>
+            <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.49;0.5;1" dur="10s" repeatCount="indefinite" />
+          </g>
+          {/* Full text appears all at once after 5s */}
+          <g opacity="0">
+            <text x="14" y="22" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>A cat is a small domesticated</text>
+            <text x="14" y="34" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>carnivorous mammal of the family</text>
+            <text x="14" y="46" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>Felidae, kept as a pet worldwide.</text>
+            <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.49;0.5;1" dur="10s" repeatCount="indefinite" />
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+{/* Streaming */}
+
+  <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">With streaming</span>
+    </div>
+    <div className="p-3 bg-white dark:bg-gray-950">
+      <div className="flex justify-end mb-2">
+        <div className="rounded-2xl rounded-br-md px-3 py-1.5 bg-blue-500 text-white text-xs">What is a cat?</div>
+      </div>
+      <div className="flex justify-start">
+        <svg viewBox="0 0 260 60" className="w-full" xmlns="http://www.w3.org/2000/svg">
+          <style>{`
+            .sw1,.sw2,.sw3,.sw4,.sw5,.sw6,.sw7,.sw8,.sw9,.sw10,.sw11,.sw12,.sw13,.sw14,.sw15,.sw16,.sw17 { opacity:0; }
+            .sw1 { animation: sw1 10s infinite; }
+            .sw2 { animation: sw2 10s infinite; }
+            .sw3 { animation: sw3 10s infinite; }
+            .sw4 { animation: sw4 10s infinite; }
+            .sw5 { animation: sw5 10s infinite; }
+            .sw6 { animation: sw6 10s infinite; }
+            .sw7 { animation: sw7 10s infinite; }
+            .sw8 { animation: sw8 10s infinite; }
+            .sw9 { animation: sw9 10s infinite; }
+            .sw10 { animation: sw10 10s infinite; }
+            .sw11 { animation: sw11 10s infinite; }
+            .sw12 { animation: sw12 10s infinite; }
+            .sw13 { animation: sw13 10s infinite; }
+            .sw14 { animation: sw14 10s infinite; }
+            .sw15 { animation: sw15 10s infinite; }
+            .sw16 { animation: sw16 10s infinite; }
+            .sw17 { animation: sw17 10s infinite; }
+            @keyframes sw1  { 0%,3%  { opacity:0; } 4%,75%  { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw2  { 0%,6%  { opacity:0; } 7%,75%  { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw3  { 0%,9%  { opacity:0; } 10%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw4  { 0%,12% { opacity:0; } 13%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw5  { 0%,15% { opacity:0; } 16%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw6  { 0%,18% { opacity:0; } 19%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw7  { 0%,21% { opacity:0; } 22%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw8  { 0%,24% { opacity:0; } 25%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw9  { 0%,27% { opacity:0; } 28%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw10 { 0%,30% { opacity:0; } 31%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw11 { 0%,33% { opacity:0; } 34%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw12 { 0%,36% { opacity:0; } 37%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw13 { 0%,39% { opacity:0; } 40%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw14 { 0%,42% { opacity:0; } 43%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw15 { 0%,45% { opacity:0; } 46%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw16 { 0%,48% { opacity:0; } 49%,75% { opacity:1; } 76%,100% { opacity:0; } }
+            @keyframes sw17 { 0%,51% { opacity:0; } 52%,75% { opacity:1; } 76%,100% { opacity:0; } }
+          `}</style>
+          <rect x="0" y="0" width="260" height="60" rx="12" className="fill-gray-100 dark:fill-gray-800" />
+          {/* Streaming words — each full line builds up cumulatively */}
+          <g className="sw1"><text x="14" y="22" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>A</text></g>
+          <g className="sw2"><text x="14" y="22" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>A cat</text></g>
+          <g className="sw3"><text x="14" y="22" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>A cat is</text></g>
+          <g className="sw4"><text x="14" y="22" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>A cat is a</text></g>
+          <g className="sw5"><text x="14" y="22" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>A cat is a small</text></g>
+          <g className="sw6"><text x="14" y="22" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>A cat is a small domesticated</text></g>
+          {/* Line 2 */}
+          <g className="sw7"><text x="14" y="34" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>carnivorous</text></g>
+          <g className="sw8"><text x="14" y="34" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>carnivorous mammal</text></g>
+          <g className="sw9"><text x="14" y="34" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>carnivorous mammal of</text></g>
+          <g className="sw10"><text x="14" y="34" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>carnivorous mammal of the</text></g>
+          <g className="sw11"><text x="14" y="34" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>carnivorous mammal of the family</text></g>
+          {/* Line 3 */}
+          <g className="sw12"><text x="14" y="46" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>Felidae,</text></g>
+          <g className="sw13"><text x="14" y="46" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>Felidae, kept</text></g>
+          <g className="sw14"><text x="14" y="46" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>Felidae, kept as</text></g>
+          <g className="sw15"><text x="14" y="46" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>Felidae, kept as a</text></g>
+          <g className="sw16"><text x="14" y="46" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>Felidae, kept as a pet</text></g>
+          <g className="sw17"><text x="14" y="46" className="fill-gray-700 dark:fill-gray-300" style={{fontSize: "9px"}}>Felidae, kept as a pet worldwide.</text></g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+### Lambda Web Adapter
+
+So how could this be implemented with AWS API Gateway + AWS Lambda? One option is to use [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter). This is a Lambda extension that allows you to run web applications on AWS Lambda with using familiar frameworks such as Next.js or FastAPI (basically anything that speaks HTTP 1.1/1.0) by translating the incoming Lambda event into a real HTTP request and forwards it to the web application. It also creates portability since the same docker image can run on different platforms without any modification. And most importantly, it supports streaming.
+
+To enable the LWA, you need to add the extension to /opt/extensions/ directory. In Dockerfile this can be done by copying the extension from Lambda docker image:
+
+```dockerfile
+FROM public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 AS lwa
+...
+COPY --from=lwa /lambda-adapter /opt/extensions/lambda-adapter
+# Start uvicorn. LWA routes Lambda invocations to port 8080.
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+You need to also set these environment variables in the Lambda function CDK construct definition:
+
+```typescript
+const queryHandlerLambda = new DockerImageFunction(this, 'QueryHandler', {
+  code: DockerImageCode.fromImageAsset('src/lib/lambdas/query/app'),
+  logGroup: queryLambdaLogGroup,
+  timeout: Duration.seconds(60),
+  tracing: Tracing.ACTIVE,
+  memorySize: 256,
+  environment: {
+    AWS_LWA_INVOKE_MODE: 'RESPONSE_STREAM',
+    AWS_LWA_PORT: '8080',
+  },
+})
+```
+
+On top of this, you need to configure the API Gateway resource to set the Lambda integration URI to be **2021-11-15/functions/ARN/response-streaming-invocations** and set the method property **Integration.ResponseTransferMode** to be **STREAM**.
+
+```typescript
+const streamingUri = `arn:aws:apigateway:${this.region}:lambda:path/2021-11-15/functions/${queryHandlerLambda.functionArn}/response-streaming-invocations`;
+
+for (const method of [rootMethod, proxyResource.anyMethod!]) {
+  const cfnMethod = method.node.defaultChild as CfnMethod;
+  cfnMethod.addPropertyOverride(
+    'Integration.ResponseTransferMode',
+    'STREAM'
+  );
+  cfnMethod.addPropertyOverride('Integration.Uri', streamingUri);
+
+```
+
+The backend Lambda checks the field `"stream": true` in the chat completion request body and returns a [Server-Sent Events (SSE)](https://en.wikipedia.org/wiki/Server-sent_events) stream:
+
+```bash
+curl -N https://<api-url>/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "anthropic.claude-haiku-4-5-20251001-v1:0", "messages": [{"role": "user", "content": "What is this document about?"}], "stream": true}'
+```
+
+Each chunk follows the OpenAI SSE format:
+
+```text
+data: {"choices": [{"delta": {"content": "The document"}, "index": 0}]}
+data: {"choices": [{"delta": {"content": " covers..."}, "index": 0}]}
+data: [DONE]
+```
+
+### Application Logic
+
+The AWS Lambda function yields chunks immediately as they are received from Bedrock. On top of the basic streaming, there were a few additional considerations:
+
+**Citations** — I wanted to return source metadata (filename, page number, text excerpt) alongside the generated answer so the user can verify the response.
+
+**ConverseStream over RetrieveAndGenerateStream** — I initially used the RetrieveAndGenerateStream API but the model didn't respect custom system prompts. So I switched to doing the retrieval separately and using the [ConverseStream](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ConverseStream.html) API, which gave me full control over the message construction.
+
+**Intent classification** — Not every prompt needs a knowledge base search (e.g. a greeting at the start of a conversation). I added an intent classification step that labels the prompt as either `CONVERSATIONAL` or `RETRIEVAL`. To minimize latency, both classification and retrieval run in parallel — so the retrieval call is made and billed even for conversational prompts, but the results are discarded if not needed. This is a deliberate latency-vs-cost trade-off: sequential execution would save costs on conversational prompts but add noticeable delay to every retrieval prompt.
+
+```python
+def stream_chat_completion(event: ChatCompletionRequest):
+    """Retrieve from KB, then stream LLM response via converse_stream."""
+    logger.info("Streaming chat completion request")
+
+    # 1. Classify intent and retrieve in parallel to avoid sequential latency
+    query = event.messages[-1].content
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        classify_future = pool.submit(_needs_retrieval, query)
+        retrieve_future = pool.submit(_retrieve, query)
+
+        needs_retrieval = classify_future.result()
+        results = retrieve_future.result() if needs_retrieval else []
+
+    if results:
+        logger.info(f"Retrieved {len(results)} chunks from KB")
+    else:
+        logger.info("Skipping retrieval based on query classification")
+
+    # 2. Build citations from retrieved chunks (deduplicated)
+    citations = _build_citations(results)
+
+    # 3. Assemble passages text for the prompt
+    passages = "\n\n---\n\n".join(r.get("content", {}).get("text", "") for r in results)
+
+    # 4. Build messages and stream via converse_stream
+    system_prompt, messages = _build_messages(event, passages)
+
+    response = bedrock_runtime.converse_stream(
+        modelId=MODEL_ARN,
+        system=[{"text": system_prompt}],
+        messages=messages,
+    )
+
+    for chunk in response.get("stream", []):
+        if "contentBlockDelta" in chunk:
+            text = chunk["contentBlockDelta"].get("delta", {}).get("text", "")
+            if text:
+                data = {
+                    "choices": [
+                        {"delta": {"content": text}, "index": 0, "finish_reason": None}
+                    ]
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+
+    # 5. Send citations after the text stream completes
+    if citations:
+        yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
+
+    yield "data: [DONE]\n\n"
+```
+
+So that's the main functionality of the completions API.
+
+### API Reference
+
+Here's the list of all APIs that we have:
+
+| Method   | Path                          | Description                          |
+| -------- | ----------------------------- | ------------------------------------ |
+| `GET`    | `/health`                     | Health check                         |
+| `GET`    | `/v1/models`                  | List available models                |
+| `GET`    | `/v1/models/{model_id}`       | Get model details                    |
+| `POST`   | `/v1/documents`               | Get a presigned S3 upload URL        |
+| `GET`    | `/v1/documents`               | List uploaded documents              |
+| `DELETE` | `/v1/documents/{document_id}` | Delete a document                    |
+| `POST`   | `/v1/chat/completions`        | RAG chat completion (streaming/sync) |
+| `GET`    | `/v1/kb/status`               | Get KB ingestion job status          |
+| `POST`   | `/v1/kb/sync`                 | Trigger KB ingestion                 |
+
+## Frontend
+
+Since I'm not a frontend developer, the frontend was fully vibe coded with [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview). I basically just described what I wanted and iterated on the results. The whole frontend was done in a few hours.
+
+### Tech Stack
+
+It's a **React 19** app built with **TypeScript** and **Vite**, styled with **Tailwind CSS 4**. No component libraries — everything is custom built. The UI has a dark theme with a monospace font (Fira Code) giving it a nice terminal-like feel.
+
+### Chat & Streaming
+
+The chat interface handles **SSE streaming** using the Fetch API's `ReadableStream` — it reads chunks from the response body, parses the `data:` lines, and renders content word by word as it arrives. Citations are streamed as a separate SSE event after the text completes and displayed in a collapsible sources panel with filename, page number and an expandable text excerpt.
+
+Conversation sessions are persisted in **localStorage** — no backend state needed. The full message history is sent with each request, keeping the Lambda stateless. I probably should have used DynamoDB for storing sessions but I decided to move this feature to backlog and implement it later. The trade-off is that the chat sessions are not carried over different browser sessions and devices.
+
+### Document Management
+
+For document management, file uploads go directly to S3 via **presigned POST URLs** — the frontend requests a presigned URL from the backend, then uploads straight to S3 without proxying through Lambda. After upload, the UI triggers a knowledge base sync and polls the ingestion status every 3 seconds until it completes.
+
+### Deployment
+
+The frontend is containerized with a multi-stage Docker build (Node for building, Nginx for serving) and deployed alongside the backend. Nginx serves the static assets and reverse proxies `/v1/*` requests to the backend Lambda (or container). Again, these static assets could have been hosted in S3 + Cloudfront but the fact that I didn't have any authentication in place and the time constraints made me want to just run this on my own homelab server reachable only from my home network.
+
+# Final Product
+
+We now have a modern, containerized, portable and responsive web application that is surprisingly useful.
+
+<figure className="my-8 text-center">
+  <video
+    autoPlay
+    loop
+    muted
+    playsInline
+    className="mx-auto mt-6 max-w-sm rounded-xl"
+    loading="lazy"
+  >
+    <source src="/static/images/rag-demo-compressed.mp4" type="video/mp4" />
+  </video>
+  <figcaption className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+    RAG application demo
+  </figcaption>
+</figure>
+
+I immediately tested this with my personal notes and some technical documentation (not about cats and dogs...) and got some good results. The source sections attached to each answer give verifiability by showing the exact text citation the RAG query returned. The Knowledge Base sync is quite fast as well, usually only takes a couple of seconds when uploading or deleting a file.
+
+I showed this project to my friend and he said that this would be quite useful to be used with his study notes e.g. creating sample exam questions or just asking about some niche topic. Maybe I need to productize this and allow my friends to use it as well.
+
+# Final Thoughts
+
+This project demonstrated how to make AI more reliable and accurate. That's one of the biggest issues of AI at this moment. How can we trust the answers it generates for us? By using RAG we can ensure that the model has correct and up-to-date context when we ask domain-specific questions. The downside of RAG is that you need to build a RAG pipeline, manage the knowledge base and keep it updated. Fortunately AWS makes this quite painless with its service offering and good support for automation tools such as CDK.
+
+**Disclaimer**:
+This project is for demo purposes only, it doesn't have any authentication mechanism or support for multiple users. I also don't plan to maintain this project for long unless I get a motivation boost to actually develop this to a full product. Keep this in mind if you plan to self-host this on AWS or in your own homelab.
+
+I think my next project will also be AI related, maybe related to agents and [AWS Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/).
+
+# Source Code
+
+<div className="my-6 flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 dark:border-gray-700 dark:bg-gray-800">
+  <svg
+    viewBox="0 0 24 24"
+    width="28"
+    height="28"
+    className="flex-shrink-0 fill-gray-800 dark:fill-gray-200"
+  >
+    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+  </svg>
+  <span className="text-base">The full source code for this project is available on GitHub: <a href="https://github.com/v3se/aws-rag-demo" target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline dark:text-blue-400">aws-rag-demo</a></span>
+</div>
+
+# Sources
+
+- [Choosing an AWS vector database for RAG use cases - Vectors](https://docs.aws.amazon.com/prescriptive-guidance/latest/choosing-an-aws-vector-database-for-rag-use-cases/vectors.html)
+- [What is a vector database? - IBM](https://www.ibm.com/think/topics/vector-database)
+- [What is RAG? - AWS](https://aws.amazon.com/what-is/retrieval-augmented-generation/)
+- [Retrieval-augmented generation - Wikipedia](https://en.wikipedia.org/wiki/Retrieval-augmented_generation)
+- [Retrieving information from data sources using Amazon Bedrock Knowledge Bases](https://docs.aws.amazon.com/bedrock/latest/userguide/kb-how-retrieval.html)
+- [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter)
