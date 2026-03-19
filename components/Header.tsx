@@ -18,9 +18,9 @@ const Header = () => {
     <header className={headerClass}>
       <Link href="/" aria-label={siteMetadata.headerTitle}>
         <div className="flex items-center justify-between">
-          <div className="mr-2 hidden xs:block sm:block md:block lg:block xl:block">
-            <Image src="/static/favicons/logo.png" alt="Logo" width={40} height={40} sizes="40px" quality={100} className="hidden dark:block" />
-            <Image src="/static/favicons/logo-light.png" alt="Logo" width={40} height={40} sizes="40px" quality={100} className="block dark:hidden" />
+          <div className="mr-2">
+            <Image src="/static/favicons/logo.png" alt="Logo" width={40} height={40} sizes="(max-width: 640px) 32px, 40px" quality={100} className="hidden dark:block w-8 h-8 sm:w-10 sm:h-10" />
+            <Image src="/static/favicons/logo-light.png" alt="Logo" width={40} height={40} sizes="(max-width: 640px) 32px, 40px" quality={100} className="block dark:hidden w-8 h-8 sm:w-10 sm:h-10" />
           </div>
           <div className="text-sm sm:text-base md:text-lg font-semibold h-6">
             <Terminal />
