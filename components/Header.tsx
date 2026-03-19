@@ -1,6 +1,6 @@
 import siteMetadata from '@/data/siteMetadata'
 import headerNavLinks from '@/data/headerNavLinks'
-import Logo from '@/data/logo.svg'
+import Image from 'next/image'
 import Link from './Link'
 import MobileNav from './MobileNav'
 import ThemeSwitch from './ThemeSwitch'
@@ -19,7 +19,8 @@ const Header = () => {
       <Link href="/" aria-label={siteMetadata.headerTitle}>
         <div className="flex items-center justify-between">
           <div className="mr-2 hidden xs:block sm:block md:block lg:block xl:block">
-            <Logo />
+            <Image src="/static/favicons/logo.png" alt="Logo" width={40} height={40} sizes="40px" quality={100} className="hidden dark:block" />
+            <Image src="/static/favicons/logo-light.png" alt="Logo" width={40} height={40} sizes="40px" quality={100} className="block dark:hidden" />
           </div>
           <div className="text-sm sm:text-base md:text-lg font-semibold h-6">
             <Terminal />
